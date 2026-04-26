@@ -192,3 +192,73 @@ a different, fully-fledged hardware implementation.
 This is a non-trivial result for the team's planning: **for a real 2:4
 deployment of UNet (or any model) the deployment target must be A100 or
 newer**, not an RTX A4000 / A6000 box. JSON in `results/cusparselt_stand.json`.
+
+## Fine-tuning recovers (and exceeds) baseline quality
+
+Following the NVIDIA ASP recipe (prune once, fine-tune to recover), we ran 1
+epoch of decoder-only fine-tuning with the encoder frozen (cheap on a
+contended A4000) for three configs that originally collapsed:
+
+| Method (decoder, mask kept active) | Pre-tune Dice | Post-tune Dice | vs baseline 0.9912 |
+|---|---:|---:|---:|
+| magnitude @ 0.7 | 0.9895 | **0.9940** | **+0.0028** |
+| magnitude @ 0.9 | 0.2354 | **0.9941** | **+0.0029** |
+| 2:4 (50%)       | 0.9844 | **0.9943** | **+0.0031** |
+
+All three sparsified models **exceed baseline Dice** after a single fine-tune
+epoch. magnitude@0.9 is the most striking — the model went from near-broken
+(0.2354) to better-than-baseline (0.9941) in one pass. JSON in
+`results/finetune.json`.
+
+## Iterative pruning beats one-shot
+
+Gradual ladder 30% → 50% → 70% (each step followed by 1 epoch of fine-tuning,
+mask kept across steps so prior zeros stay zero):
+
+| Step | Target | Sparsity (global) | Pre-step Dice | Post-step Dice |
+|---|---:|---:|---:|---:|
+| 1 | 30% | 0.118 | 0.9911 | **0.9939** |
+| 2 | 50% | 0.196 | 0.9932 | **0.9945** |
+| 3 | 70% | 0.275 | 0.9925 | **0.9950** |
+
+Final iterative 70% Dice is **0.9950 vs 0.9940 one-shot** — a measurable
++0.001 win, consistent with the standard iterative-pruning literature.
+JSON in `results/iterative.json`.
+
+## Full ASP combo: magnitude → 2:4 → fine-tune
+
+Stacking the two methods end to end:
+
+| Stage | Sparsity | Post Dice |
+|---|---:|---:|
+| baseline (decoder-only, no prune) | 0.000 | 0.9912 |
+| magnitude 50% + fine-tune          | 0.196 | **0.9940** |
+| + 2:4 mask + fine-tune             | 0.240 | **0.9944** |
+
+This is the canonical NVIDIA ASP recipe: a magnitude prune kicks the model to
+a sparse subspace, fine-tune lets it adapt; then 2:4 imposes the
+hardware-friendly pattern on the remaining non-zeros, and a second fine-tune
+absorbs that. End-to-end, decoder Dice goes **0.9912 → 0.9944** while 24% of
+the conv weights are zero (with a 2:4 structure on the residual). JSON in
+`results/asp_combo.json`.
+
+## Memory profile (negative result, but informative)
+
+Peak GPU memory during one inference batch (bs=8, fp16):
+
+| Method | Params | Peak GPU memory |
+|---|---:|---:|
+| baseline_fp16   | 124.2 MB | 6112.5 MB |
+| magnitude @ 0.5 | 124.2 MB | 6112.5 MB |
+| magnitude @ 0.9 | 124.2 MB | 6112.5 MB |
+| 2:4 (50%)       | 124.2 MB | 6112.5 MB |
+| structured 50%  | 124.2 MB | 6112.5 MB |
+
+**Identical to the milligram.** Zeros inside a dense tensor occupy the same
+storage as non-zeros. Activation tensors (which dominate the 6 GB peak) are
+shape-preserved across all methods. Sparsification with stock kernels
+delivers **neither speedup nor memory reduction** — only a smaller deployable
+checkpoint *if* the file is saved as a sparse data structure on disk. To get
+runtime memory back you need either physical channel removal (structured
+pruning + downstream rewiring) or a sparse kernel that materialises only the
+non-zero-times-active subblock at compute time. JSON in `results/memory.json`.
