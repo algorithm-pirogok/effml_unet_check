@@ -58,6 +58,39 @@ def parse_full_key(k: str) -> tuple[str, int]:
 
 # ---------------------------------------------------------------------- 1
 def fig_quality_envelope():
+    """Dense sweep with and without fine-tune (uses sweep.json if present,
+    otherwise falls back to the coarse 4-point full_sparsity.json)."""
+    sweep = load("sweep.json")
+    if sweep:
+        sweep = sorted(sweep, key=lambda r: r["sparsity"])
+        xs = [r["sparsity"] for r in sweep]
+        pre = [r["pre_dice"] for r in sweep]
+        post = [r["post_dice"] for r in sweep]
+        baseline = sweep[0]["pre_dice"]
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(xs, pre, marker="o", markersize=9, linewidth=2.5, color=C_BAD,
+                label="pre fine-tune (just prune)")
+        ax.plot(xs, post, marker="s", markersize=9, linewidth=2.5, color=C_RECOVER,
+                label="post 1-epoch fine-tune (frozen encoder)")
+        ax.axhline(baseline, ls="--", color=C_BASE, alpha=0.6,
+                   label=f"baseline Dice {baseline:.4f}")
+        ax.fill_between(xs, pre, post, where=[p < q for p, q in zip(pre, post)],
+                        color=C_RECOVER, alpha=0.10, label="recovered by fine-tune")
+        ax.set_xlabel("global sparsity (magnitude prune, full model)")
+        ax.set_ylabel("Dice (BinaryF1)")
+        ax.set_title("Quality envelope: cliff without retrain is gone after 1 epoch fine-tune")
+        ax.set_ylim(-0.02, 1.05)
+        ax.set_xlim(-0.02, 1.0)
+        ax.legend(loc="lower left")
+        fig.tight_layout()
+        out = OUT / "01_quality_envelope.png"
+        fig.savefig(out, dpi=160, bbox_inches="tight")
+        plt.close(fig)
+        print(f"-> {out}")
+        return
+
+    # Fallback: original 4-point version from full_sparsity.json
     full = load("full_sparsity.json")
     if not full:
         return
