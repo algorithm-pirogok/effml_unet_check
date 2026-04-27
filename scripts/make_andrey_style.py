@@ -36,8 +36,8 @@ plt.rcParams.update({
     "figure.facecolor": "white",
 })
 
-W, H = 16, 9                      # inches at 16:9
-DPI = 150                         # 2400x1350 — sharp on Google Slides
+W, H = 10, 5.625                  # match Andrey's 720x405 pts page exactly
+DPI = 200                         # 2000x1125 px — sharp on Google Slides
 TITLE_X, TITLE_Y = 0.05, 0.9
 TITLE_FS = 32
 BODY_FS = 22
@@ -90,14 +90,8 @@ def save(fig, name: str) -> None:
     print(f"-> {out}")
 
 
-# ------------------------------------------------------------------ A. Title
-def slide_a_title():
-    fig, ax = new_slide()
-    ax.text(0.5, 0.55, "Спарсификация и прунинг", fontsize=44,
-            color="black", ha="center", va="bottom")
-    ax.text(0.5, 0.42, "Курилов Олег", fontsize=24, color=GRAY,
-            ha="center", va="bottom")
-    save(fig, "A_section_title.png")
+# A_section_title removed: Andrey's deck flows directly into the next topic
+# without divider slides, so a section title would break the visual rhythm.
 
 
 # ------------------------------------------------------------------ B. Methods
@@ -208,7 +202,6 @@ def slide_g_summary():
 
 
 def main() -> int:
-    slide_a_title()
     slide_b_methods()
     slide_c_envelope()
     slide_d_iter_asp()
