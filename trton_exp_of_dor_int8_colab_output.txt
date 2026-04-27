@@ -1,0 +1,79 @@
+========================================================================
+triton  : 3.6.0
+torch   : 2.10.0+cu128
+GPU     : Tesla T4  cc=7.5
+smem    : 65536 B/block (opt-in)
+path    : /usr/local/lib/python3.12/dist-packages/triton
+========================================================================
+
+Running fp16 baseline (sanity: dot path itself works)...
+Running int8 cases...
+
+========================================================================
+dtype    M    N    K  nw  status              detail
+------------------------------------------------------------------------
+fp16    16   16   16   1  OK
+fp16    16   16   32   1  OK
+fp16    32   32   32   1  OK
+fp16    32   32   64   1  OK
+fp16    64   64   32   2  OK
+fp16    64   64   64   2  OK
+fp16   128  128   32   4  OK
+fp16   128  128   64   4  OK
+fp16   128  128  128   4  OK
+fp16   128  256   64   4  OK
+fp16   256  128   64   4  OK
+int8    16   16   16   1  CompilationError    Input shapes should have M >= 1, N >= 1 and K >= 32   @ triton/compiler/compiler.py:80 (make_ir)
+int8    16   16   32   1  CompilationError    CompilationError: at 6:10:   @ triton/compiler/compiler.py:80 (make_ir)
+int8    32   32   32   1  CompilationError    CompilationError: at 6:10:   @ triton/compiler/compiler.py:80 (make_ir)
+int8    32   32   64   1  CompilationError    CompilationError: at 6:10:   @ triton/compiler/compiler.py:80 (make_ir)
+int8    64   64   32   2  CompilationError    CompilationError: at 6:10:   @ triton/compiler/compiler.py:80 (make_ir)
+int8    64   64   64   2  CompilationError    CompilationError: at 6:10:   @ triton/compiler/compiler.py:80 (make_ir)
+int8   128  128   32   4  CompilationError    CompilationError: at 6:10:   @ triton/compiler/compiler.py:80 (make_ir)
+int8   128  128   64   4  CompilationError    CompilationError: at 6:10:   @ triton/compiler/compiler.py:80 (make_ir)
+int8   128  128  128   4  CompilationError    CompilationError: at 6:10:   @ triton/compiler/compiler.py:80 (make_ir)
+int8   128  256   64   4  CompilationError    CompilationError: at 6:10:   @ triton/compiler/compiler.py:80 (make_ir)
+int8   256  128   64   4  CompilationError    CompilationError: at 6:10:   @ triton/compiler/compiler.py:80 (make_ir)
+
+========================================================================
+Deep-dive on first failing int8 case (full Triton-internal trace):
+========================================================================
+Reproducing:  int8  16x16x16  num_warps=1
+
+Exception type     : CompilationError
+Underlying assert  : Input shapes should have M >= 1, N >= 1 and K >= 32
+
+Full error message:
+  at 6:10:
+  def k_dot_i8(A, B, C, M: tl.constexpr, N: tl.constexpr, K: tl.constexpr):
+      om = tl.arange(0, M); on = tl.arange(0, N); ok = tl.arange(0, K)
+      a = tl.load(A + om[:, None] * K + ok[None, :])
+      b = tl.load(B + ok[:, None] * N + on[None, :])
+      acc = tl.zeros((M, N), dtype=tl.int32)
+      acc = tl.dot(a, b, acc)
+            ^
+  Input shapes should have M >= 1, N >= 1 and K >= 32
+
+Traceback frames inside the Triton package:
+  triton/runtime/jit.py:370  in <lambda>
+     return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)
+  triton/runtime/jit.py:720  in run
+     kernel = self._do_compile(key, signature, device, constexprs, options, attrs, warmup)
+  triton/runtime/jit.py:849  in _do_compile
+     kernel = self.compile(src, target=target, options=options.__dict__)
+  triton/compiler/compiler.py:304  in compile
+     module = src.make_ir(target, options, codegen_fns, module_map, context)
+  triton/compiler/compiler.py:80  in make_ir
+     return ast_to_ttir(self.fn, self, context=context, options=options, codegen_fns=codegen_fns,
+
+========================================================================
+SUMMARY
+========================================================================
+  fp16 dot : 11 OK / 0 FAIL  out of 11 cases
+  int8 dot : 0 OK / 11 FAIL  out of 11 cases
+
+  Conclusion: dot path works, but int8 dot is rejected at every tile size
+              tested on Triton 3.6.0 + cc 7.5.
+              The frontend assertion lives in:
+                triton/compiler/compiler.py:80   (make_ir)
+                    return ast_to_ttir(self.fn, self, context=context, options=options, codegen_fns=codegen_fns,

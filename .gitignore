@@ -9,4 +9,5 @@ build/
 *.png
 .ipynb_checkpoints/
 *.ipynb
+!unet_segmentation_quantised.ipynb
 .DS_Store
