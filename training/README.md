@@ -11,8 +11,8 @@ Same model, same loss, same optimiser, same AMP — just runnable outside Colab.
 сохранили чистый обучающий пайплайн — чтобы можно было дообучить модель
 с псевдо-квантизованными слоями (`torch.quantization.QAT` или подобное).
 
-На практике **QAT не понадобился**: PTQ дал Δ Dice = −0.0001 (см.
-[`../QUANTISATION_NOTES.md`](../QUANTISATION_NOTES.md)). Файлы остаются
+На практике **QAT не понадобился**: PTQ дал Δ Dice = −0.0001 (см. секцию
+«UNet INT8 quantisation» в [`../README.md`](../README.md)). Файлы остаются
 для воспроизводимости чекпоинта `last.pth` и на случай, если в будущем
 модель/датасет станет более чувствительной к INT8.
 
