@@ -36,8 +36,9 @@ plt.rcParams.update({
     "figure.facecolor": "white",
 })
 
-W, H = 10, 5.625                  # match Andrey's 720x405 pts page exactly
-DPI = 200                         # 2000x1125 px — sharp on Google Slides
+W, H = 16, 9                      # work in 16:9 inches for matplotlib font sizing
+DPI = 150                         # 2400x1350 px — sharp on Google Slides
+PDF_RESOLUTION = 240              # 2400/240*72 = 720 pts → matches Andrey's page size
 TITLE_X, TITLE_Y = 0.05, 0.9
 TITLE_FS = 32
 BODY_FS = 22
